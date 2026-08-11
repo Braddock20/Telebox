@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: telegram-storage-v2
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: API_KEY
+        sync: false
+      - key: TELEGRAM_ACCOUNT_1_API_ID
+        sync: false
+      - key: TELEGRAM_ACCOUNT_1_API_HASH
+        sync: false
+      - key: TELEGRAM_ACCOUNT_1_SESSION
+        sync: false
+      - key: TELEGRAM_ACCOUNT_1_CHANNEL_ID
+        sync: false
