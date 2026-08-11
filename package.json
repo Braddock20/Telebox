@@ -1,0 +1,33 @@
+{
+  "name": "telegram-storage-v2",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "start": "node dist/server.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/**/*.test.ts",
+    "login": "tsx src/login.ts"
+  },
+  "dependencies": {
+    "@fastify/multipart": "^9.2.1",
+    "better-sqlite3": "^11.10.0",
+    "dotenv": "^17.2.1",
+    "fastify": "^5.4.0",
+    "telegram": "2.26.22",
+    "teleproto": "^1.228.4",
+    "@fastify/swagger": "^9.5.1",
+    "@fastify/swagger-ui": "^5.2.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
