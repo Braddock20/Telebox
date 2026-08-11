@@ -1,27 +1,6 @@
-# Environment
+node_modules/
+dist/
 .env
-venv/
-.venv/
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-
-# Sessions & data
-sessions/*.session
-sessions/*.session-journal
-data/*.db
-data/*.db-journal
-
-# Temp / IDE
-*.tmp
-*.temp
-.idea/
-.vscode/
-*.swp
-.DS_Store
-
-# Logs
-*.log
-logs/
+data/
+*.session
+*.session-journal
