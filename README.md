@@ -1,147 +1,88 @@
-# Telegram Storage API
+# Telegram Storage v2
 
-Unlimited cloud storage powered by **Telegram user accounts** (Telethon / MTProto).
+A production-oriented REST storage service backed by Telegram user accounts.
 
-Your application talks to a clean REST API.  
-Telegram is only the backend adapter – you never expose channel IDs or message IDs to clients.
+### Why v2?
 
-## Features
+The original Python/Telethon version had several reliability problems (notably retry handling, temporary-file lifecycle, and account failover). v2 moves the Telegram layer to Node/TypeScript and combines **teleproto + GramJS** behind one adapter:
 
-- Multiple Telegram accounts (add as many as you want via `.env`)
-- Configurable upload strategy: `round_robin` | `least_used` | `random`
-- Automatic retries + health tracking of accounts
-- Soft size limits + SHA-256 duplicate detection
-- Own file IDs (UUID) – Telegram details stay internal
-- FastAPI + async SQLAlchemy
-- Simple API key authentication
+- **teleproto first** — current MTProto implementation and typed raw API surface.
+- **GramJS fallback** — battle-tested compatibility path.
+- Per-account engine selection: `auto`, `teleproto`, or `gramjs`.
+- Automatic account failover and FloodWait-aware backoff.
+- StringSession in `.env` — easy deployment and no session files required.
+- Atomic metadata writes in SQLite.
+- SHA-256 deduplication.
+- Streaming multipart upload to disk before Telegram transfer.
+- Download cleanup with Fastify lifecycle.
+- Health and storage statistics.
+- Built-in smoke tests that do not require Telegram credentials.
 
-## Quick Start
+teleproto is a 2025 fork of GramJS with a GramJS-compatible public surface, so this architecture intentionally keeps both behind the same adapter rather than mixing two clients on one live session. citeturn0search0turn0search3
 
-### 1. Clone & install
-
-```bash
-cd telegram-storage
-python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### 2. Configure
+## Setup
 
 ```bash
+npm install
 cp .env.example .env
+npm run typecheck
+npm test
+npm run build
 ```
 
-Edit `.env`:
+Then configure `.env`.
 
-- Set a strong `API_KEY`
-- Fill in your Telegram accounts (`TELEGRAM_ACCOUNT_1_*`, `TELEGRAM_ACCOUNT_2_*`, …)
+## Login
 
-For each account you need:
-- `api_id` + `api_hash` from https://my.telegram.org
-- A private channel (create one, then get its ID – it starts with `-100`)
-
-### 3. Login (one-time per account)
+For each account:
 
 ```bash
-python login.py acc1
-python login.py acc2
+npm run login -- acc1
 ```
 
-This creates the session files under `sessions/`.
+The script asks for phone/code/2FA and prints a `StringSession`. Paste it into:
 
-### 4. Run the server
+```env
+TELEGRAM_ACCOUNT_1_SESSION=...
+```
+
+A Telegram `api_id` and `api_hash` are required. Both teleproto and GramJS use MTProto user sessions rather than the Bot API. citeturn0search1turn1search1
+
+## Channel
+
+Create a private channel for storage and add each storage account as an administrator. Put its numeric `-100...` channel ID in the corresponding account variable.
+
+## Run
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+npm run dev
+# or
+npm run build && npm start
 ```
 
-Open http://localhost:8080/docs for the interactive Swagger UI.
+Interactive API docs are at `/docs` when running.
 
-## API Endpoints
+## API
 
-| Method | Path                    | Description                  |
-|--------|-------------------------|------------------------------|
-| GET    | `/health`               | Service + account health     |
-| GET    | `/storage/stats`        | Storage statistics           |
-| POST   | `/files`                | Upload a file                |
-| GET    | `/files/{id}`           | Get file metadata            |
-| GET    | `/files/{id}/download`  | Download the file            |
-| DELETE | `/files/{id}`           | Soft-delete the file         |
+- `GET /health` — service/account/engine health.
+- `GET /storage/stats` — metadata statistics.
+- `POST /files` — multipart upload (`file` field).
+- `GET /files/:id` — metadata.
+- `GET /files/:id/download` — download.
+- `DELETE /files/:id` — delete metadata and Telegram message.
 
-All endpoints except `/health` and `/` require the header:
+All routes except `/` and `/health` require `X-API-Key`.
 
-```
-X-API-Key: your-api-key
-```
-
-### Example upload
+### Example
 
 ```bash
 curl -X POST http://localhost:8080/files \
-  -H "X-API-Key: your-api-key" \
-  -F "file=@movie.mp4"
+  -H 'X-API-Key: YOUR_KEY' \
+  -F 'file=@movie.mp4'
 ```
 
-Response:
+### Important
 
-```json
-{
-  "id": "01JXYZ...",
-  "filename": "movie.mp4",
-  "size": 734003200,
-  "mime_type": "video/mp4",
-  "created_at": "2026-08-11T09:30:00Z",
-  "updated_at": "2026-08-11T09:30:00Z"
-}
-```
+Telegram storage is not a magic unlimited disk. Account limits, flood limits, channel permissions, network throughput and Telegram policy still apply. This service only manages the storage layer; it does not bypass Telegram limits.
 
-## Project Structure
-
-```
-telegram-storage/
-├── app/
-│   ├── main.py              # FastAPI routes
-│   ├── storage.py           # High-level storage service
-│   ├── telegram_manager.py  # Multi-account manager + health
-│   ├── database.py          # SQLAlchemy models
-│   └── config.py            # Settings + dynamic account loading
-├── sessions/                # Telethon session files (git-ignored)
-├── data/                    # SQLite database
-├── login.py                 # One-time account login helper
-├── .env.example
-├── requirements.txt
-└── README.md
-```
-
-## Adding a new account
-
-Just add three more lines to `.env`:
-
-```env
-TELEGRAM_ACCOUNT_3_NAME=acc3
-TELEGRAM_ACCOUNT_3_API_ID=...
-TELEGRAM_ACCOUNT_3_API_HASH=...
-TELEGRAM_ACCOUNT_3_SESSION=sessions/account3
-TELEGRAM_ACCOUNT_3_CHANNEL_ID=-100...
-```
-
-Then run:
-
-```bash
-python login.py acc3
-```
-
-Restart the server – no code changes needed.
-
-## Important Notes
-
-- **File size limit**: Telegram free accounts = 2 GB, Premium = 4 GB. The soft limit is controlled by `MAX_FILE_SIZE_MB`.
-- **Rate limits**: The service respects `FloodWait` and will temporarily mark unhealthy accounts.
-- **Privacy**: Normal Telegram channels are **not** end-to-end encrypted. Encrypt sensitive data before uploading if needed.
-- **Account health**: Keep the accounts mildly active so Telegram doesn’t mark them inactive.
-- **Backup**: The `.session` files + the SQLite database are critical. Back them up.
-
-## License
-
-MIT – use it however you like.
+Never commit `.env` or session strings.
